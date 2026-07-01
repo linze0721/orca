@@ -121,7 +121,7 @@ import {
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
-import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 
@@ -281,8 +281,9 @@ export default function TerminalPane({
   const replayingPanesRef = useRef<Map<number, number>>(new Map())
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
-  const isVisibleRef = useRef(isVisible)
-  isVisibleRef.current = isVisible
+  const isRendererVisible = isVisible && isWorktreeActive
+  const isVisibleRef = useRef(isRendererVisible)
+  isVisibleRef.current = isRendererVisible
 
   useVisibleTerminalTabClaim({ isVisible, tabId })
 
@@ -1284,7 +1285,7 @@ export default function TerminalPane({
     setupSplit,
     issueCommandSplit,
     isActive,
-    isVisible,
+    isVisible: isRendererVisible,
     systemPrefersDark,
     settings,
     settingsRef,
@@ -1637,7 +1638,7 @@ export default function TerminalPane({
     isWorktreeActive,
     // Why: hidden startup probes are opacity-hidden but measurable; ordinary
     // hidden tabs are display:none and refit on visibility resume instead.
-    isSyncFitEnabled: isVisible || shouldMeasureHiddenStartup,
+    isSyncFitEnabled: isRendererVisible || shouldMeasureHiddenStartup,
     paneCount,
     managerRef,
     containerRef,
@@ -1715,11 +1716,11 @@ export default function TerminalPane({
       return
     }
     let ownsRegularTerminalFocus = false
-    let releasedMirrorOnWindowBlur = false
+    let releasedHelperOnWindowBlur: HTMLElement | null = null
     const syncFocused = (focused: boolean): void => {
       ownsRegularTerminalFocus = focused
       if (focused) {
-        releasedMirrorOnWindowBlur = false
+        releasedHelperOnWindowBlur = null
       }
       setRegularTerminalInputFocusAttribute(focused)
       window.api.ui.setTerminalInputFocused?.(focused)
@@ -1749,7 +1750,7 @@ export default function TerminalPane({
     const onWindowBlur = (): void => {
       // Why: webview/browser handoff leaves the helper textarea as DOM focus,
       // so clear only the main-process mirror and let guest focus proceed.
-      releasedMirrorOnWindowBlur = releaseTerminalFocusForWindowBlur({
+      releasedHelperOnWindowBlur = releaseTerminalFocusForWindowBlur({
         container,
         activeElement: document.activeElement,
         syncFocused
@@ -1763,10 +1764,10 @@ export default function TerminalPane({
           container,
           activeElement: document.activeElement,
           syncFocused,
-          releasedMirrorOnWindowBlur
+          releasedHelper: releasedHelperOnWindowBlur
         })
       ) {
-        releasedMirrorOnWindowBlur = false
+        releasedHelperOnWindowBlur = null
       }
     }
 
